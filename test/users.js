@@ -19,6 +19,19 @@ describe('users controllers ', () => {
       });
   });
 
+  it('should get all users', (done) => {
+    chai.request(url)
+      .get('/api/v1/users')
+      .set('x-access-token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwdWJsaWNfaWQiOiJlODM3ZjZlMi02YzQ1LTRkNmMtYTc0NC02YWVhMGU0YzUzZDYiLCJleHAiOjE1MzU1MTc5ODR9.rQkiztj8xsJ-AbqHrXcJkUNb3nZxCgPNKU3CWDX8qCc')
+      .set("Content-Type", "application/json")
+      .end(function (err, res) {
+        console.log(res.body)
+        users = res.body.users;
+        expect(res).to.have.status(200);
+        done();    // <= Test completes before this runs
+      });
+  })
+
 
   let users = []
 
@@ -31,7 +44,7 @@ describe('users controllers ', () => {
         done();
       });
   }
-
+/*
   it('should get all users', (done) => {
     chai.request(url)
       .get('/users')
@@ -49,7 +62,7 @@ describe('users controllers ', () => {
         expect(res).to.have.status(200);
         done();    // <= Test completes before this runs
       });
-  })
+  })*/
 })
 
 

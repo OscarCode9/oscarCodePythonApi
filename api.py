@@ -4,14 +4,28 @@ import uuid
 import json
 import jwt
 import datetime
+import os
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from functools import wraps
+from validate_email import validate_email
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = 'thisismySewcretKay'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////home/oscarcode/Documents/pythonAPI/todo.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+from flaskext.mysql import MySQL
+
+
+mysql = MySQL()
+
+app.config['MYSQL_DATABASE_USER'] = os.environ['MYSQL_DATABASE_USER']
+app.config['MYSQL_DATABASE_PASSWORD'] = os.environ['MYSQL_DATABASE_PASSWORD']
+app.config['MYSQL_DATABASE_DB'] = os.environ['MYSQL_DATABASE_DB']
+app.config['MYSQL_DATABASE_HOST'] = os.environ['MYSQL_DATABASE_HOST']
+
+mysql.init_app(app)
 
 db = SQLAlchemy(app)
 
@@ -68,23 +82,101 @@ class AlchemyEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
+@app.route('/api/v1/users', methods=['GET'])
+def mysql_get_all_users():
+    conn = mysql.connect()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * from Users")
+    users = cursor.fetchall()
+    output = []
+    for user in users:
+        user_data = {}
+        user_data['id'] = user[0]
+        user_data['firstName'] = user[1]
+        user_data['lastName'] = user[2]
+        user_data['email'] = user[3]
+        user_data['password'] = user[4]
+        user_data['username'] = user[5]
+        output.append(user_data)
+    conn.close()
+    return jsonify({'users': output})
+
+@app.route('/api/v1/user', methods=['POST'] )
+def mysql_create_user():
+    conn = mysql.connect()
+    cursor = conn.cursor()
+    data = request.get_json()
+
+    sql_query = """INSERT INTO 
+        Users (id,
+            firstName,
+            lastname,
+            email ,
+            password,
+            username)
+    VALUES (null,%s,%s,%s,%s,%s)"""
+
+    hash_password = generate_password_hash(data['password'], method='sha256')
+    firstName = data['firstName']
+    lastName = data['lastName']
+    email = data['email']
+    username = data['username']
+
+    is_email = validate_email(email)
+    if not is_email:
+        return make_response(jsonify({
+            'message': 'Email is not validate',
+            'error': True
+            }), 401)
+
+    cursor.execute(sql_query , (firstName, lastName, email , hash_password, username))
+
+    sql_select_by_id ="""SELECT * FROM Users WHERE username = %s """
+    cursor.execute(sql_select_by_id , (username))
+    user = cursor.fetchone()
+
+    user_object = {}
+
+    if not all(user):
+        return make_response(jsonify({
+            'message': 'Error is the database',
+            'error': True
+            }), 404)
+
+    user_object['id'] = user[0]
+    user_object['firstName'] = user[1]
+    user_object['lastName'] = user[2]
+    user_object['email'] = user[3]
+    user_object['username'] = user[5]
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'user': user_object,
+        'message': 'A new user has been inserted in the datebase',
+        'error' : False
+    })
+
 @app.route('/users', methods=['GET'])
 @token_required
 def get_all_users(current_user):
 
-	
+    if not current_user.admin:
+        return jsonify({'message': 'Cannot perform that function!'})
 
-	users = User.query.all()
-	output = []
-	
-	for user in users:
-			user_data = {}
-			user_data['public_id'] = user.public_id
-			user_data['name'] = user.name
-			user_data['password'] = user.password
-			user_data['admin'] = user.admin
-			output.append(user_data)
-	return jsonify({'users': output})
+    users = User.query.all()
+    output = []
+
+    for user in users:
+        user_data = {}
+        user_data['public_id'] = user.public_id
+        user_data['name'] = user.name
+        user_data['password'] = user.password
+        user_data['admin'] = user.admin
+        output.append(user_data)
+    return jsonify({'users': output})
+
 
 
 @app.route('/user/<public_id>', methods=['GET'])
@@ -107,7 +199,7 @@ def create_user():
     data = request.get_json()
     hash_password = generate_password_hash(data['password'], method='sha256')
     new_user = User(public_id=str(uuid.uuid4()),
-                    name=data['name'], password=hash_password, admin=data['admin'])
+                    name=data['name'], password=hash_password, admin=False)
     db.session.add(new_user)
     db.session.commit()
     new_user = json.dumps(new_user, cls=AlchemyEncoder)
