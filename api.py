@@ -11,6 +11,7 @@ from functools import wraps
 from validate_email import validate_email
 app = Flask(__name__)
 
+
 app.config['SECRET_KEY'] = 'thisismySewcretKay'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////home/oscarcode/Documents/pythonAPI/todo.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -81,6 +82,32 @@ class AlchemyEncoder(json.JSONEncoder):
 
         return json.JSONEncoder.default(self, obj)
 
+
+# get user by username 
+@app.route('/api/v1/user/<username>', methods=['GET'] )
+def mysql_get_one(username):
+    conn = mysql.connect()
+    cursor = conn.cursor()
+    
+    sql_query = """SELECT * FROM Users WHERE username = %s"""
+    cursor.execute(sql_query, (username))
+    user = cursor.fetchone()
+
+    if not user:
+        return make_response(jsonify({
+            'message': 'we can"t find this user',
+            'error': True
+            }), 404)
+    user_object = {}
+   
+    user_object['id'] = user[0]
+    user_object['firstName'] = user[1]
+    user_object['lastName'] = user[2]
+    user_object['email'] = user[3]
+    user_object['username'] = user[5]
+
+    conn.close()
+    return jsonify({'user':  user_object})
 
 @app.route('/api/v1/users', methods=['GET'])
 def mysql_get_all_users():
