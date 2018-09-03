@@ -100,7 +100,7 @@ def mysql_delete_one_user(username):
     else:
         conn.close()
         return jsonify({
-        'message': 'we can\'t find this user, any user has been deleted',
+        'message': 'User hasn\'t been deleted, we can\'t find this user',
         'error': True })
 
 # get user by username
@@ -129,6 +129,67 @@ def mysql_get_one(username):
 
     conn.close()
     return jsonify({'user':  user_object})
+
+@app.route('/api/v1/user/<username>', methods=['PUT'])
+def mysql_update_one_user(username):
+
+    conn = mysql.connect()
+    cursor = conn.cursor()
+    
+    data=request.get_json()
+
+    sql_query="""SELECT * FROM Users WHERE username = %s"""
+    cursor.execute(sql_query, (username))
+    user=cursor.fetchone()
+
+    if not user:
+        return make_response(jsonify({
+            'message': 'we can\'t find this user',
+            'error': True
+            }), 404)
+
+    sql_query = """
+    UPDATE Users SET
+    firstName = %s,
+    lastName = %s,
+    email = %s,
+    username = %s
+    WHERE username = %s;"""
+    
+    firstName=data['firstName']
+    lastName=data['lastName']
+    email=data['email']
+    newusername=data['username']
+
+    cursor.execute(sql_query, (firstName, lastName, email, newusername, username))
+    
+
+    sql_select_by_id="""SELECT * FROM Users WHERE username = %s """
+    cursor.execute(sql_select_by_id, (newusername))
+    user=cursor.fetchone()
+
+    user_object={}
+
+    if not user:
+        return make_response(jsonify({
+            'message': 'Error is the database',
+            'error': True
+            }), 404)
+
+    user_object['id']=user[0]
+    user_object['firstName']=user[1]
+    user_object['lastName']=user[2]
+    user_object['email']=user[3]
+    user_object['username']=user[5]
+    
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'user': user_object,
+        'message': 'This user has been updated',
+        'error': False
+    })
 
 @app.route('/api/v1/users', methods=['GET'])
 def mysql_get_all_users():
